@@ -281,3 +281,8 @@ pub trait HbFtExt {
     /// Shape the provided text into a set of glyphs.
     fn shape(&mut self, text: &str, font_key: FontKey) -> harfbuzz_rs::GlyphBuffer;
 }
+
+#[cfg(target_os = "macos")]
+pub trait CtExt: Rasterize {
+    fn shape(&mut self, text: &str, font_key: FontKey) -> Result<Vec<KeyType>, Self::Err>;
+}

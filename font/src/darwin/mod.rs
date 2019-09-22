@@ -40,6 +40,8 @@ use core_text::font_descriptor::kCTFontHorizontalOrientation;
 use core_text::font_descriptor::kCTFontVerticalOrientation;
 use core_text::font_descriptor::SymbolicTraitAccessors;
 use core_text::font_descriptor::{CTFontDescriptor, CTFontOrientation};
+use core_text::string_attributes::kCTFontAttributeName;
+use core_text::string_attributes::kCTLigatureAttributeName;
 
 use euclid::{Point2D, Rect, Size2D};
 
@@ -123,6 +125,48 @@ impl ::std::fmt::Display for Error {
             ),
             Error::FontNotLoaded => f.write_str("Tried to use a font that hasn't been loaded"),
         }
+    }
+}
+
+impl crate::CtExt for Rasterizer {
+
+    // TODO: avoid producing a vector here (since it'll just be consumed on the other end)
+    fn shape(&mut self, text: &str, key: FontKey) -> Result<Vec<KeyType>, Error> {
+        use core_foundation::attributed_string::CFMutableAttributedString;
+        use core_foundation::number::CFNumber;
+        use core_foundation_sys::base::CFRange;
+        use core_text::line::CTLine;
+        use core_foundation::base::TCFType;
+        let font = self.fonts.get(&key).ok_or(Error::FontNotLoaded)?;
+
+        let built = CFString::new(text);
+        let mut mut_str = CFMutableAttributedString::new();
+
+        // Splice in the text context, set the right font, and enable ligatures
+        unsafe {
+          mut_str.replace_str(&built, CFRange::init(0, 0));
+          let len = mut_str.char_len();
+
+          // Set the font and enable ligatures
+          mut_str.set_attribute(CFRange::init(0,len), kCTFontAttributeName, font.ct_font.as_CFType());
+          mut_str.set_attribute(CFRange::init(0,len), kCTLigatureAttributeName, CFNumber::from(1));
+        }
+
+        let line = CTLine::new_with_attributed_string(mut_str.as_concrete_TypeRef());
+        let runs = line.glyph_runs();
+
+        let mut to_return: Vec<KeyType> = vec![];
+
+        for run in runs.iter() {
+          let glyphs = run.glyphs();
+            // TODO: fallback font stuff?
+          // let new_font = run.attributes().unwrap().get(kCTFontAttributeName).downcast::<font::CTFont>().unwrap();
+          for i in 0..glyphs.len() {
+            to_return.push(KeyType::GlyphIndex(u32::from(glyphs[i])));
+          }
+        }
+
+        Ok(to_return)
     }
 }
 

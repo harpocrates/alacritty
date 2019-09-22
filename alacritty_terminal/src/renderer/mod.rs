@@ -24,6 +24,8 @@ use std::time::Duration;
 use fnv::FnvHasher;
 #[cfg(not(any(target_os = "macos", windows)))]
 use font::HbFtExt;
+#[cfg(target_os = "macos")]
+use font::CtExt;
 use font::{
     self, FontDesc, FontKey, GlyphKey, Rasterize, RasterizedGlyph, Rasterizer, PLACEHOLDER_GLYPH,
 };
@@ -298,7 +300,7 @@ impl GlyphCache {
 
     // Shaping is only avaiable on linux for now
     // On other OSs grab run glyphs as normal
-    #[cfg(any(target_os = "macos", windows))]
+    #[cfg(windows)]
     fn shape_run<'a, L>(
         &'a mut self,
         text_run: &str,
@@ -312,6 +314,27 @@ impl GlyphCache {
             .chars()
             .map(|c| {
                 let glyph_key = GlyphKey { id: c.into(), font_key, size: self.font_size };
+                *self.get(glyph_key, loader)
+            })
+            .collect()
+    }
+
+    // Shape using core-text
+    #[cfg(target_os = "macos")]
+    pub fn shape_run<'a, L>(
+        &'a mut self,
+        text_run: &str,
+        font_key: FontKey,
+        loader: &'a mut L,
+    ) -> Vec<Glyph>
+    where
+        L: LoadGlyph,
+    {
+        self.rasterizer
+            .shape(text_run, font_key).unwrap()
+            .into_iter()
+            .map(move |id| {
+                let glyph_key = GlyphKey { id, font_key, size: self.font_size };
                 *self.get(glyph_key, loader)
             })
             .collect()
